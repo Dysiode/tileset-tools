@@ -1,0 +1,54 @@
+Tileset Tools for Inkscape
+==========================
+
+TTI makes it simple to extract tilesets from screenshots and stitch them
+together in the comfort of Inkscape.
+
+Requirements
+------------
+
+TTI is built against:
+* Inkscape 0.48
+* PIL 1.1.7 (packaged with TTI because Inkscape is weird)
+
+
+Design Goals
+------------
+
+I wrote TTI to aid in my own largely simplistic needs (sprites contained in each
+tile, no transparency, etc.), however, there are several tools I can think of
+beyond simple tile extraction and pixel vectorization. These include:
+
+* extracting sprites from known tiles using differencing and masking
+* packing tilesets
+* offering useful feedback about improvements that could be made at each step
+
+
+Recommended Environment
+-----------------------
+
+- For the timing being the extension doesn't help setup the environment.
+
+Using a grid with 1 pixel spacing and major grid lines every tile_size units.
+This grid allows you to copy/paste exactly in the grid both when working with
+tiles and pixels within each tile.
+
+I also recommend setting the width of the page to a multiple of your tile size,
+this firstly helps the script but also makes organizing the tiles significantly
+easier.
+
+Using TTI
+---------
+
+Now for the good stuff: Using the tools.
+
+Screenshots must be placed on a layer titled "Source Layer". For best results:
+* Crop any user interfacing (or just be aware that you're going to be manually
+filtering junk tiles).
+* Ensure the screenshot is cropped to a multiple of the tile size.
+As of this revision it will ignore extra pixels on the right and bottom sides
+but as soon as the next revision some extraction optimizations will force it too
+reject images that aren't perfectly cropped.
+* The extractor (currently) has no concept of tiles it's already extracted so
+it's more effecient to extract from many screenshots at once so you're not
+manually removing duplicate tiles.
