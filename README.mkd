@@ -8,6 +8,7 @@ Requirements
 ------------
 
 TTI is built against:
+
 * Inkscape 0.48
 * PIL 1.1.7 (packaged with TTI because Inkscape is weird)
 
@@ -27,9 +28,9 @@ beyond simple tile extraction and pixel vectorization. These include:
 Recommended Environment
 -----------------------
 
-- For the timing being the extension doesn't help setup the environment.
+_For the timing being the extension doesn't help setup the environment._
 
-Using a grid with 1 pixel spacing and major grid lines every tile_size units.
+Using a grid with 1 pixel spacing and major grid lines every tile size units.
 This grid allows you to copy/paste exactly in the grid both when working with
 tiles and pixels within each tile.
 
@@ -43,12 +44,7 @@ Using TTI
 Now for the good stuff: Using the tools.
 
 Screenshots must be placed on a layer titled "Source Layer". For best results:
-* Crop any user interfacing (or just be aware that you're going to be manually
-filtering junk tiles).
-* Ensure the screenshot is cropped to a multiple of the tile size.
-As of this revision it will ignore extra pixels on the right and bottom sides
-but as soon as the next revision some extraction optimizations will force it too
-reject images that aren't perfectly cropped.
-* The extractor (currently) has no concept of tiles it's already extracted so
-it's more effecient to extract from many screenshots at once so you're not
-manually removing duplicate tiles.
+
+* Crop any user interfacing (or just be aware that you're going to be manually filtering junk tiles).
+* Ensure the screenshot is cropped to a multiple of the tile size. As of this revision it will ignore extra pixels on the right and bottom sides but as soon as the next revision some extraction optimizations will force it too reject images that aren't perfectly cropped.
+* The extractor (currently) has no concept of tiles it's already extracted so it's more effecient to extract from many screenshots at once so you're not manually removing duplicate tiles.
