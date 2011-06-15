@@ -28,7 +28,9 @@ beyond simple tile extraction and pixel vectorization. These include:
 Recommended Environment
 -----------------------
 
-_For the timing being the extension doesn't help setup the environment._
+There's now an extension that will resize the page to x columns wide and
+twice that high (just as a guesstimate for the space needed, the height doesn't
+affect any of the other extensions) and add a properly size grid.
 
 Using a grid with 1 pixel spacing and major grid lines every tile size units.
 This grid allows you to copy/paste exactly in the grid both when working with

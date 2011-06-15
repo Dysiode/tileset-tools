@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+	<_name>Setup Environment</_name>
+	<id>org.codesmelter.tilesettools.setup</id>
+	<dependency type="executable" location="extensions">setup_environment.py</dependency>
+    <dependency type="executable" location="extensions">inkex.py</dependency>
+    <param name="size" type="int" min="1" max="1024" _gui-text="The square size of a given tile, px">12</param>
+    <param name="columns" type="int" min="1" max="1024" _gui-text="The number of tiles wide (5-10 is a good range)">8</param>
+	<effect>
+		<object-type>all</object-type>
+		<effects-menu>
+			<submenu _name="Tileset Tools"/>
+		</effects-menu>
+	</effect>
+	<script>
+		<command reldir="extensions" interpreter="python">setup_environment.py</command>
+	</script>
+</inkscape-extension>
