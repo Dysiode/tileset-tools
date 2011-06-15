@@ -29,6 +29,11 @@ class VectorizeTiles(inkex.Effect):
 						dest = 'tile_size', default = '12',
 						help = 'What is the size of a tile in pixels?')
 
+		self.OptionParser.add_option('-a', '--all',
+						action = 'store', type = 'inkbool',
+						dest = 'all', default = False,
+						help = 'Vectorize all tileset layers?')
+
 		self.OptionParser.add_option('-g', '--group',
 						action = 'store', type = 'inkbool',
 						dest = 'group', default = True,
@@ -36,8 +41,14 @@ class VectorizeTiles(inkex.Effect):
 
 	def effect(self):
 		self.tile_size = tile_size = self.options.tile_size
+		all = self.options.all
 
-		layers = self.document.xpath('//svg:g[@inkscape:label="Tileset Layer"]', namespaces=inkex.NSS)
+		if all:
+			layers = self.document.xpath('//svg:g[@inkscape:label="Tileset Layer"]', namespaces=inkex.NSS)
+		else:
+			base = self.xpathSingle('//sodipodi:namedview[@id="base"]')
+			current_layer = base.attrib[inkex.addNS('current-layer', 'inkscape')]
+			layers = self.getElementById(current_layer)
 
 		for layer in layers:
 			tiles = layer.xpath('svg:image', namespaces=inkex.NSS)
