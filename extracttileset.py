@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import logging
+import itertools
 import sys
 import urllib
 
@@ -28,7 +29,7 @@ def get_tileset_size(tiles, columns, tile_size):
 		)) * tile_size
 	return width, height
 
-def get_unique_tiles(img, size=12):
+def get_unique_tiles_slowly(img, size=12):
 	logging.info("Gathering unique tiles...")
 	tiles = set()
 	_, _, max_x, max_y = img.getbbox()
@@ -42,6 +43,47 @@ def get_unique_tiles(img, size=12):
 			tiles.add(tile.tostring())
 	logging.info("Found %d unique tiles" % len(tiles))
 	return tiles
+
+def calculate_linear_ranges(index, width, tile_size):
+	slices = []
+	for i in range(0, tile_size):
+		row = ((index[1] * tile_size) + i) * width
+		leftmost = row + (index[0] * tile_size)
+		slices.append(slice(leftmost, leftmost + tile_size))
+	return slices
+
+
+def get_unique_tiles(img, tile_size=12):
+	logging.info("Gathering unique tiles...")
+
+	_, _, max_x, max_y = img.getbbox()
+
+	columns = max_x / float(tile_size)
+	rows = max_y / float(tile_size)
+	# Using this method we can't reliably assume the tiles properly begin at the
+	# upper left corner so we're going to kick it back.
+	#TODO: Make this kick back some actual feedback.
+	if not columns.is_integer() or not rows.is_integer():
+		return set()
+
+	columns = int(columns)
+	rows = int(rows)
+
+	pixels = tuple(img.getdata())
+	tiles = set()
+
+	for x in range(0, columns):
+		for y in range(0, rows):
+			slices = calculate_linear_ranges((x, y), max_x, tile_size)
+			tile = tuple(pixels[s] for s in slices)
+			tiles.add(tile)
+	logging.info("Found %d unique tiles" % len(tiles))
+	return tiles
+
+def rebuild_tile(tile_tuple, tile_size):
+	tile_img = Image.new('RGB', (tile_size, tile_size))
+	tile_img.putdata(tuple(itertools.chain.from_iterable(tile_tuple)))
+	return tile_img
 
 def compile_tileset(tiles, columns=10, tile_size=12):
 	logging.info("Compiling tileset...")
@@ -70,13 +112,13 @@ class CompileTileset(inkex.Effect):
 						help = 'What is the size of a tile in pixels?')
 
 		self.OptionParser.add_option('-c', '--clear',
-						action = 'store', type = 'inkboolean',
-						dest = 'clear', default = False,
+						action = 'store', type = 'inkbool',
+						dest = 'clear_first', default = False,
 						help = 'Clear existing Tileset Layers?')
 
 	def effect(self):
 		tile_size = self.options.tile_size
-		clear_old_layers = self.options.clear_old_layers
+		clear_old_layers = self.options.clear_first
 
 		root = self.document.xpath('//svg:svg',namespaces=inkex.NSS)[0]
 
@@ -100,7 +142,7 @@ class CompileTileset(inkex.Effect):
 		for uri in self.gather_source_uris():
 			tiles |= get_unique_tiles(Image.open(self.decode_uri(uri)), tile_size)
 
-		tiles = [Image.fromstring('RGB', (tile_size, tile_size), tile) for tile in tiles]
+		tiles = [rebuild_tile(tile, tile_size) for tile in tiles]
 		for i, tile in enumerate(tiles):
 			uri = make_data_uri(tile)
 			img = self.build_svg_img(
@@ -130,17 +172,23 @@ class CompileTileset(inkex.Effect):
 		return img
 
 
+if __name__ == '__main__':
+	effect = CompileTileset()
+	effect.affect()
 
-effect = CompileTileset()
-effect.affect()
-
-#if __name__ == '__main__':
-#	imgs = sys.argv[1:]
-#	tiles = set()
-#	for path in imgs:
-#		img = Image.open(path)
-#		tiles = tiles.union(get_unique_tiles(img))
-#	tileset = compile_tileset(tiles)
-#	tileset.show()
-#	print make_data_uri(tileset)
-#	input()
+	# Forgive the mess, I'll clean it up when I'm done! I promise!
+	#imgs = sys.argv[1:]
+	#tiles = set()
+	#for path in [r"C:\Users\Patrick\My Dropbox\src\games\drain storm\2011-06-13_104602.png"]:#imgs:
+	#	global img
+	#	img = Image.open(path)
+	#	tiles = tiles.union(get_unique_tiles(img))
+	#	#tiles = tiles.union(get_unique_tiles(img))
+	#	#import timeit
+	#	#The new fn
+	#	#print timeit.timeit('get_unique_tiles(img)', 'from __main__ import get_unique_tiles, img', number=5)
+	#	#print timeit.timeit('get_unique_tiles_slowly(img)', 'from __main__ import get_unique_tiles_slowly, img', number=5)
+	##tileset = compile_tileset(tiles)
+	##tileset.show()
+	##print make_data_uri(tileset)
+	##input()

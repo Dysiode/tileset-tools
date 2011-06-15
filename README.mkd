@@ -45,6 +45,12 @@ Now for the good stuff: Using the tools.
 
 Screenshots must be placed on a layer titled "Source Layer". For best results:
 
-* Crop any user interfacing (or just be aware that you're going to be manually filtering junk tiles).
-* Ensure the screenshot is cropped to a multiple of the tile size. As of this revision it will ignore extra pixels on the right and bottom sides but as soon as the next revision some extraction optimizations will force it too reject images that aren't perfectly cropped.
-* The extractor (currently) has no concept of tiles it's already extracted so it's more effecient to extract from many screenshots at once so you're not manually removing duplicate tiles.
+* Crop any user interfacing (or just be aware that you're going to be manually
+filtering junk tiles).
+* Ensure the screenshot is cropped to a multiple of the tile size.
+The extractor will silently ignore any images that aren't perfect multiples,
+hopefully this will change in future versions (I imagine painting something
+over the screenshot).
+* The extractor (currently) has no concept of tiles it's already extracted so
+it's more effecient to extract from many screenshots at once so you're not
+manually removing duplicate tiles.
