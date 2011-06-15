@@ -7,6 +7,7 @@ import urllib
 from cStringIO import StringIO
 
 import inkex
+import simplestyle
 
 from PIL import Image
 
@@ -15,12 +16,21 @@ logging.basicConfig(
 	stream=sys.stderr
 )
 
+def rgb2hex(rgb):
+	return "#%02X%02X%02X" % rgb
+
 def make_data_uri(img):
 	s = StringIO()
 	img.save(s, 'png')
 	s.seek(0)
 	img_s = ''.join(s.readlines()).encode('base64').translate(None, '\n')
 	return "data:image/png;base64,%s" % img_s
+
+def decode_uri(uri):
+	if uri.startswith("file:///"):
+		return urllib.unquote(uri[len("file:///"):])
+	return StringIO(uri[uri.find("base64,") + len("base64,"):].decode('base64'))
+
 
 def get_tileset_size(tiles, columns, tile_size):
 	width = columns * tile_size
@@ -51,7 +61,6 @@ def calculate_linear_ranges(index, width, tile_size):
 		leftmost = row + (index[0] * tile_size)
 		slices.append(slice(leftmost, leftmost + tile_size))
 	return slices
-
 
 def get_unique_tiles(img, tile_size=12):
 	logging.info("Gathering unique tiles...")
@@ -116,9 +125,21 @@ class CompileTileset(inkex.Effect):
 						dest = 'clear_first', default = False,
 						help = 'Clear existing Tileset Layers?')
 
+		self.OptionParser.add_option('-v', '--vectorize',
+						action = 'store', type = 'inkbool',
+						dest = 'vectorize', default = True,
+						help = 'Vectorize each tile?')
+
+		self.OptionParser.add_option('-g', '--group',
+				action = 'store', type = 'inkbool',
+				dest = 'group', default = True,
+				help = 'Group like colors into paths?')
+
+
 	def effect(self):
-		tile_size = self.options.tile_size
-		clear_old_layers = self.options.clear_first
+		self.tile_size = tile_size = self.options.tile_size
+		clear_first = self.options.clear_first
+		vectorize = self.options.vectorize
 
 		root = self.document.xpath('//svg:svg',namespaces=inkex.NSS)[0]
 
@@ -127,7 +148,7 @@ class CompileTileset(inkex.Effect):
 
 		columns = width // tile_size
 
-		if clear_old_layers:
+		if clear_first:
 			set_layer_path = '//svg:g[@inkscape:label="Tileset Layer"]'
 			set_layer = root.xpath(set_layer_path, namespaces=inkex.NSS)
 			for layer in set_layer:
@@ -140,19 +161,31 @@ class CompileTileset(inkex.Effect):
 
 		tiles = set()
 		for uri in self.gather_source_uris():
-			tiles |= get_unique_tiles(Image.open(self.decode_uri(uri)), tile_size)
+			tiles |= get_unique_tiles(Image.open(decode_uri(uri)), tile_size)
 
-		tiles = [rebuild_tile(tile, tile_size) for tile in tiles]
-		for i, tile in enumerate(tiles):
-			uri = make_data_uri(tile)
-			img = self.build_svg_img(
-				uri,
-				x = str((i % columns) * tile_size),
-				y = str((i // columns) * tile_size),
-				width = str(tile_size),
-				height = str(tile_size)
-			)
-			set_layer.append(img)
+		if vectorize:
+			for i, tile in enumerate(tiles):
+				if self.options.group:
+					vector_func = self.vectorize_data_with_path
+				else:
+					vector_func = self.vectorize_data
+				vector_tile = vector_func(
+					tile, ((i % columns) * tile_size,
+						   (i // columns) * tile_size)
+				)
+				set_layer.append(vector_tile)
+		else:
+			tiles = [rebuild_tile(tile, tile_size) for tile in tiles]
+			for i, tile in enumerate(tiles):
+				uri = make_data_uri(tile)
+				img = self.build_svg_img(
+					uri,
+					x = str((i % columns) * tile_size),
+					y = str((i // columns) * tile_size),
+					width = str(tile_size),
+					height = str(tile_size)
+				)
+				set_layer.append(img)
 
 	def gather_source_uris(self):
 		path = '//svg:g[@inkscape:label="Source Layer"]/svg:image'
@@ -161,15 +194,79 @@ class CompileTileset(inkex.Effect):
 		for element in source_elements:
 			yield element.attrib[inkex.addNS('href', 'xlink')]
 
-	def decode_uri(self, uri):
-		if uri.startswith("file:///"):
-			return urllib.unquote(uri[len("file:///"):])
-		return StringIO(uri[uri.find("base64,") + len("base64,"):].decode('base64'))
-
 	def build_svg_img(self, uri, **attrs):
 		img = inkex.etree.Element(inkex.addNS('image', 'svg'), attrs)
 		img.set(inkex.addNS('href', 'xlink'), uri)
 		return img
+
+	def vectorize_data(self, tile_data, tile_xy):
+		tile_size = self.tile_size
+		tile_x, tile_y = tile_xy
+
+		tile_data = tuple(itertools.chain.from_iterable(tile_data))
+
+		#TODO: It may make sense to compile each pixel into a path of that color
+		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
+		for i, rgb in enumerate(tile_data):
+			x = tile_x + (i % tile_size)
+			y = tile_y + (i // tile_size)
+
+			style = {
+				'stroke': 'none',
+				'fill': str(rgb2hex(rgb)),
+			}
+
+			attrs = {
+				'style': simplestyle.formatStyle(style),
+				'x': str(x),
+				'y': str(y),
+				'width': '1',
+				'height': '1',
+			}
+
+			pixel = inkex.etree.Element(inkex.addNS('rect', 'svg'), attrs)
+			tile_group.append(pixel)
+		return tile_group
+
+	def vectorize_data_with_path(self, tile_data, tile_xy):
+		tile_size = self.tile_size
+		tile_x, tile_y = tile_xy
+
+		tile_data = tuple(itertools.chain.from_iterable(tile_data))
+
+		#TODO: It may make sense to compile each pixel into a path of that color
+		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
+		color_groups = {}
+		for i, rgb in enumerate(tile_data):
+			x = tile_x + (i % tile_size)
+			y = tile_y + (i // tile_size)
+
+			if rgb not in color_groups:
+				color_groups[rgb] = []
+			color_groups[rgb].append((x, y))
+
+		for rgb, points in color_groups.iteritems():
+			path = ""
+			path_template = "m %d,%d 1,0 0,1 -1,0 z "
+			last_point = (0, 0)
+			for point in points:
+				path += path_template % (point[0]-last_point[0],
+										 point[1]-last_point[1])
+				last_point = point
+
+			style = {
+				'stroke': 'none',
+				'fill': str(rgb2hex(rgb)),
+			}
+
+			attrs = {
+				'd': path,
+				'style': simplestyle.formatStyle(style),
+			}
+
+			pixel_group = inkex.etree.Element(inkex.addNS('path', 'svg'), attrs)
+			tile_group.append(pixel_group)
+		return tile_group
 
 
 if __name__ == '__main__':
