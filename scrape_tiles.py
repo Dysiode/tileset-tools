@@ -20,6 +20,7 @@ def rgb2hex(rgb):
 	return "#%02X%02X%02X" % rgb
 
 def make_data_uri(img):
+	"Convert an Image to a base64 URI"
 	s = StringIO()
 	img.save(s, 'png')
 	s.seek(0)
@@ -27,17 +28,10 @@ def make_data_uri(img):
 	return "data:image/png;base64,%s" % img_s
 
 def decode_uri(uri):
+	"Scrap a URI which suitable to pass to Image.open()"
 	if uri.startswith("file:///"):
 		return urllib.unquote(uri[len("file:///"):])
 	return StringIO(uri[uri.find("base64,") + len("base64,"):].decode('base64'))
-
-
-def get_tileset_size(tiles, columns, tile_size):
-	width = columns * tile_size
-	height = int(round(
-			(tiles / float(columns)) + 0.5
-		)) * tile_size
-	return width, height
 
 def get_unique_tiles_slowly(img, size=12):
 	logging.info("Gathering unique tiles...")
@@ -54,7 +48,8 @@ def get_unique_tiles_slowly(img, size=12):
 	logging.info("Found %d unique tiles" % len(tiles))
 	return tiles
 
-def calculate_linear_ranges(index, width, tile_size):
+def calculate_linear_slices(index, width, tile_size):
+	"Calculate slices representing a 2D box in a 1D space."
 	slices = []
 	for i in range(0, tile_size):
 		row = ((index[1] * tile_size) + i) * width
@@ -83,35 +78,13 @@ def get_unique_tiles(img, tile_size=12):
 
 	for x in range(0, columns):
 		for y in range(0, rows):
-			slices = calculate_linear_ranges((x, y), max_x, tile_size)
+			slices = calculate_linear_slices((x, y), max_x, tile_size)
 			tile = tuple(pixels[s] for s in slices)
 			tiles.add(tile)
 	logging.info("Found %d unique tiles" % len(tiles))
 	return tiles
 
-def rebuild_tile(tile_tuple, tile_size):
-	tile_img = Image.new('RGB', (tile_size, tile_size))
-	tile_img.putdata(tuple(itertools.chain.from_iterable(tile_tuple)))
-	return tile_img
-
-def compile_tileset(tiles, columns=10, tile_size=12):
-	logging.info("Compiling tileset...")
-	tiles = [Image.fromstring('RGB', (tile_size, tile_size), tile) for tile in tiles]
-	set_size = get_tileset_size(len(tiles), columns, tile_size)
-	tileset = Image.new('RGB', set_size)
-	for i, tile in enumerate(tiles):
-		x = i % columns
-		y = (i / columns)
-		box = (
-			(x * tile_size), (y * tile_size),
-			(x+1) * tile_size, (y+1) * tile_size
-		)
-		tileset.paste(tile, box)
-	logging.info("Finished compiling tileset")
-	return tileset
-
 class CompileTileset(inkex.Effect):
-
 	def __init__(self):
 		inkex.Effect.__init__(self)
 
@@ -175,7 +148,7 @@ class CompileTileset(inkex.Effect):
 				)
 				set_layer.append(vector_tile)
 		else:
-			tiles = [rebuild_tile(tile, tile_size) for tile in tiles]
+			tiles = [rebuild_tile(tile) for tile in tiles]
 			for i, tile in enumerate(tiles):
 				uri = make_data_uri(tile)
 				img = self.build_svg_img(
@@ -194,18 +167,24 @@ class CompileTileset(inkex.Effect):
 		for element in source_elements:
 			yield element.attrib[inkex.addNS('href', 'xlink')]
 
+	def rebuild_tile(self, tile_tuple):
+		"Rebuild a tile image from it's pixel tuples"
+		tile_img = Image.new('RGB', (self.tile_size, self.tile_size))
+		tile_img.putdata(tuple(itertools.chain.from_iterable(tile_tuple)))
+		return tile_img
+
 	def build_svg_img(self, uri, **attrs):
 		img = inkex.etree.Element(inkex.addNS('image', 'svg'), attrs)
 		img.set(inkex.addNS('href', 'xlink'), uri)
 		return img
 
 	def vectorize_data(self, tile_data, tile_xy):
+		"build a group of vector pixels from the color data of an Image"
 		tile_size = self.tile_size
 		tile_x, tile_y = tile_xy
 
 		tile_data = tuple(itertools.chain.from_iterable(tile_data))
 
-		#TODO: It may make sense to compile each pixel into a path of that color
 		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
 		for i, rgb in enumerate(tile_data):
 			x = tile_x + (i % tile_size)
@@ -229,12 +208,12 @@ class CompileTileset(inkex.Effect):
 		return tile_group
 
 	def vectorize_data_with_path(self, tile_data, tile_xy):
+		"build groups of paths representing like-colored pixels of an Image"
 		tile_size = self.tile_size
 		tile_x, tile_y = tile_xy
 
 		tile_data = tuple(itertools.chain.from_iterable(tile_data))
 
-		#TODO: It may make sense to compile each pixel into a path of that color
 		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
 		color_groups = {}
 		for i, rgb in enumerate(tile_data):
@@ -272,20 +251,3 @@ class CompileTileset(inkex.Effect):
 if __name__ == '__main__':
 	effect = CompileTileset()
 	effect.affect()
-
-	# Forgive the mess, I'll clean it up when I'm done! I promise!
-	#imgs = sys.argv[1:]
-	#tiles = set()
-	#for path in [r"C:\Users\Patrick\My Dropbox\src\games\drain storm\2011-06-13_104602.png"]:#imgs:
-	#	global img
-	#	img = Image.open(path)
-	#	tiles = tiles.union(get_unique_tiles(img))
-	#	#tiles = tiles.union(get_unique_tiles(img))
-	#	#import timeit
-	#	#The new fn
-	#	#print timeit.timeit('get_unique_tiles(img)', 'from __main__ import get_unique_tiles, img', number=5)
-	#	#print timeit.timeit('get_unique_tiles_slowly(img)', 'from __main__ import get_unique_tiles_slowly, img', number=5)
-	##tileset = compile_tileset(tiles)
-	##tileset.show()
-	##print make_data_uri(tileset)
-	##input()
