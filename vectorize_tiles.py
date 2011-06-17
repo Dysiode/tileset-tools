@@ -8,6 +8,7 @@ from cStringIO import StringIO
 
 import inkex
 import simplestyle
+import tti_tools
 
 from PIL import Image
 
@@ -48,7 +49,7 @@ class VectorizeTiles(inkex.Effect):
 		else:
 			base = self.xpathSingle('//sodipodi:namedview[@id="base"]')
 			current_layer = base.attrib[inkex.addNS('current-layer', 'inkscape')]
-			layers = self.getElementById(current_layer)
+			layers = [self.getElementById(current_layer)]
 
 		for layer in layers:
 			tiles = layer.xpath('svg:image', namespaces=inkex.NSS)
@@ -83,76 +84,12 @@ class VectorizeTiles(inkex.Effect):
 		tile_img = Image.open(self.decode_uri(tile.attrib[inkex.addNS('href', 'xlink')]))
 		tile_data = tile_img.getdata()
 
+		any_img = tti_tools.AnyImage(tile_size, (tile_x, tile_y), tile_data)
+
 		if self.options.group:
-			return self.vectorize_data_with_path(tile_data, (tile_x, tile_y))
+			return any_img.vectorize_with_paths()
 
-		return self.vectorize_data(tile_data, (tile_x, tile_y))
-
-	def vectorize_data(self, tile_data, tile_xy):
-		tile_size = self.tile_size
-		tile_x, tile_y = tile_xy
-
-		#TODO: It may make sense to compile each pixel into a path of that color
-		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
-		for i, rgb in enumerate(tile_data):
-			x = tile_x + (i % tile_size)
-			y = tile_y + (i // tile_size)
-
-			style = {
-				'stroke': 'none',
-				'fill': str(rgb2hex(rgb)),
-			}
-
-			attrs = {
-				'style': simplestyle.formatStyle(style),
-				'x': str(x),
-				'y': str(y),
-				'width': '1',
-				'height': '1',
-			}
-
-			pixel = inkex.etree.Element(inkex.addNS('rect', 'svg'), attrs)
-			tile_group.append(pixel)
-		return tile_group
-
-	def vectorize_data_with_path(self, tile_data, tile_xy):
-		tile_size = self.tile_size
-		tile_x, tile_y = tile_xy
-
-		#TODO: It may make sense to compile each pixel into a path of that color
-		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
-		color_groups = {}
-		for i, rgb in enumerate(tile_data):
-			x = tile_x + (i % tile_size)
-			y = tile_y + (i // tile_size)
-
-			if rgb not in color_groups:
-				color_groups[rgb] = []
-			color_groups[rgb].append((x, y))
-
-		for rgb, points in color_groups.iteritems():
-			path = ""
-			path_template = "m %d,%d 1,0 0,1 -1,0 z "
-			last_point = (0, 0)
-			for point in points:
-				path += path_template % (point[0]-last_point[0],
-										 point[1]-last_point[1])
-				last_point = point
-
-			style = {
-				'stroke': 'none',
-				'fill': str(rgb2hex(rgb)),
-			}
-
-			attrs = {
-				'd': path,
-				'style': simplestyle.formatStyle(style),
-			}
-
-			pixel_group = inkex.etree.Element(inkex.addNS('path', 'svg'), attrs)
-			tile_group.append(pixel_group)
-		return tile_group
-
+		return any_img.vectorize()
 
 	def decode_uri(self, uri):
 		if uri.startswith("file:///"):

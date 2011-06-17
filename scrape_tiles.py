@@ -8,6 +8,7 @@ from cStringIO import StringIO
 
 import inkex
 import simplestyle
+import tti_tools
 
 from PIL import Image
 
@@ -79,18 +80,18 @@ def get_unique_tiles(img, tile_size=12):
 	for x in range(0, columns):
 		for y in range(0, rows):
 			slices = calculate_linear_slices((x, y), max_x, tile_size)
-			tile = tuple(pixels[s] for s in slices)
+			tile = tuple(itertools.chain.from_iterable(pixels[s] for s in slices))
 			tiles.add(tile)
 	logging.info("Found %d unique tiles" % len(tiles))
 	return tiles
 
-class CompileTileset(inkex.Effect):
+class ScrapeTiles(inkex.Effect):
 	def __init__(self):
 		inkex.Effect.__init__(self)
 
 		self.OptionParser.add_option('-s', '--size',
 						action = 'store', type = 'int',
-						dest = 'tile_size', default = '12',
+						dest = 'tile_size', default = 12,
 						help = 'What is the size of a tile in pixels?')
 
 		self.OptionParser.add_option('-c', '--clear',
@@ -104,9 +105,9 @@ class CompileTileset(inkex.Effect):
 						help = 'Vectorize each tile?')
 
 		self.OptionParser.add_option('-g', '--group',
-				action = 'store', type = 'inkbool',
-				dest = 'group', default = True,
-				help = 'Group like colors into paths?')
+						action = 'store', type = 'inkbool',
+						dest = 'group', default = True,
+						help = 'Group like colors into paths?')
 
 
 	def effect(self):
@@ -138,17 +139,18 @@ class CompileTileset(inkex.Effect):
 
 		if vectorize:
 			for i, tile in enumerate(tiles):
+				pos = tti_tools.index2pos(columns, i, scale=tile_size)
+
+				any_img = tti_tools.AnyImage(tile_size, pos, tile)
+
 				if self.options.group:
-					vector_func = self.vectorize_data_with_path
+					vector_tile = any_img.vectorize_with_paths()
 				else:
-					vector_func = self.vectorize_data
-				vector_tile = vector_func(
-					tile, ((i % columns) * tile_size,
-						   (i // columns) * tile_size)
-				)
+					vector_tile = any_img.vectorize()
+
 				set_layer.append(vector_tile)
 		else:
-			tiles = [rebuild_tile(tile) for tile in tiles]
+			tiles = [self.rebuild_tile(tile) for tile in tiles]
 			for i, tile in enumerate(tiles):
 				uri = make_data_uri(tile)
 				img = self.build_svg_img(
@@ -170,7 +172,7 @@ class CompileTileset(inkex.Effect):
 	def rebuild_tile(self, tile_tuple):
 		"Rebuild a tile image from it's pixel tuples"
 		tile_img = Image.new('RGB', (self.tile_size, self.tile_size))
-		tile_img.putdata(tuple(itertools.chain.from_iterable(tile_tuple)))
+		tile_img.putdata(tile_tuple)
 		return tile_img
 
 	def build_svg_img(self, uri, **attrs):
@@ -178,76 +180,6 @@ class CompileTileset(inkex.Effect):
 		img.set(inkex.addNS('href', 'xlink'), uri)
 		return img
 
-	def vectorize_data(self, tile_data, tile_xy):
-		"build a group of vector pixels from the color data of an Image"
-		tile_size = self.tile_size
-		tile_x, tile_y = tile_xy
-
-		tile_data = tuple(itertools.chain.from_iterable(tile_data))
-
-		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
-		for i, rgb in enumerate(tile_data):
-			x = tile_x + (i % tile_size)
-			y = tile_y + (i // tile_size)
-
-			style = {
-				'stroke': 'none',
-				'fill': str(rgb2hex(rgb)),
-			}
-
-			attrs = {
-				'style': simplestyle.formatStyle(style),
-				'x': str(x),
-				'y': str(y),
-				'width': '1',
-				'height': '1',
-			}
-
-			pixel = inkex.etree.Element(inkex.addNS('rect', 'svg'), attrs)
-			tile_group.append(pixel)
-		return tile_group
-
-	def vectorize_data_with_path(self, tile_data, tile_xy):
-		"build groups of paths representing like-colored pixels of an Image"
-		tile_size = self.tile_size
-		tile_x, tile_y = tile_xy
-
-		tile_data = tuple(itertools.chain.from_iterable(tile_data))
-
-		tile_group = inkex.etree.Element(inkex.addNS('g', 'svg'))
-		color_groups = {}
-		for i, rgb in enumerate(tile_data):
-			x = tile_x + (i % tile_size)
-			y = tile_y + (i // tile_size)
-
-			if rgb not in color_groups:
-				color_groups[rgb] = []
-			color_groups[rgb].append((x, y))
-
-		for rgb, points in color_groups.iteritems():
-			path = ""
-			path_template = "m %d,%d 1,0 0,1 -1,0 z "
-			last_point = (0, 0)
-			for point in points:
-				path += path_template % (point[0]-last_point[0],
-										 point[1]-last_point[1])
-				last_point = point
-
-			style = {
-				'stroke': 'none',
-				'fill': str(rgb2hex(rgb)),
-			}
-
-			attrs = {
-				'd': path,
-				'style': simplestyle.formatStyle(style),
-			}
-
-			pixel_group = inkex.etree.Element(inkex.addNS('path', 'svg'), attrs)
-			tile_group.append(pixel_group)
-		return tile_group
-
-
 if __name__ == '__main__':
-	effect = CompileTileset()
+	effect = ScrapeTiles()
 	effect.affect()
